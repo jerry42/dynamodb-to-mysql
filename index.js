@@ -8,7 +8,7 @@ const getItems = async (table_name) => {
 		{
 			TableName: table_name,
 		},
-		{ concurrency: process.env.CONCURRENCY }
+		{ concurrency: parseInt(process.env.CONCURRENCY) || 10 }
 	);
 	return items;
 };
@@ -101,14 +101,12 @@ function create_sql_type(field_item) {
 const extract_table_structure = async (table_name) => {
 	const mysql_connection = await mysql.createConnection({
 		host: process.env.MYSQL_HOST,
-		// host: 'host.docker.internal',
 		user: process.env.MYSQL_USER,
 		password: process.env.MYSQL_PASSWORD,
 		database: process.env.MYSQL_DATABASE,
 	});
 
 	const DescribeTableInput = {
-		//
 		TableName: table_name,
 	};
 	var pk_field = "";
@@ -208,7 +206,6 @@ const extract_table_structure = async (table_name) => {
 	} else {
 		let sqlDescribe = `SHOW COLUMNS FROM ${table_name}`;
 		let resDescribe = await mysql_connection.query(sqlDescribe);
-		// console.log(resDescribe);
 		for (let i = 0; i < resDescribe.length; i++) {
 			let item = {};
 			item.name = resDescribe[i].Field;
@@ -259,12 +256,12 @@ const copy_data = async (table_name, truncate = false) => {
 	await mysql_connection.end();
 };
 
-const dynamodb2MySQL = async (table_name, truncate = false) => {
+exports.dynamodb2MySQL = async (table_name, truncate = false) => {
 	await extract_table_structure(table_name);
 	await copy_data(table_name, truncate);
 };
 
-const dynamodb2MySQLAllTables = async (truncate = false) => {
+exports.dynamodb2MySQLAllTables = async (truncate = false) => {
 	const command = new ListTablesCommand({});
 	const response = await ddb_client.send(command);
 	for (let i = 0; i < response.TableNames.length; i++) {
@@ -275,5 +272,3 @@ const dynamodb2MySQLAllTables = async (truncate = false) => {
 	return false;
 };
 
-module.exports = dynamodb2MySQLAllTables;
-module.exports = dynamodb2MySQL;
