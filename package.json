@@ -6,7 +6,7 @@
     "promise-mysql": "^5.2.0"
   },
   "name": "dynamodb-to-mysql",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Export DynamoDB to MySQL",
   "main": "index.js",
   "scripts": {
