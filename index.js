@@ -142,7 +142,9 @@ const extract_table_structure = async (table_name) => {
 		}
 		struct_data.push(item);
 	}
-
+	if (struct_data.length == 0) {
+		return false
+	}
 	for (let i = 0; i < allItems.length; i++) {
 		let columns = extract_columns(allItems[i]);
 		let newCol = getItemsNotPresentInArray(columns, base_col);
@@ -271,4 +273,3 @@ exports.dynamodb2MySQLAllTables = async (truncate = false) => {
 	}
 	return false;
 };
-
