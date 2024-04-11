@@ -2,6 +2,9 @@ const { parallelScan } = require("@shelf/dynamodb-parallel-scan"); // https://gi
 const { DynamoDBClient, DescribeTableCommand, ListTablesCommand } = require("@aws-sdk/client-dynamodb");
 const ddb_client = new DynamoDBClient({ region: "eu-west-3" });
 const mysql = require("promise-mysql");
+const verbose = process.env.VERBOSE || false;
+const mysqlEngine = process.env.MYSQL_ENGINE || 'InnoDB';
+const mysqlCharset = process.env.MYSQL_CHARSET || 'utf8';
 
 const getItems = async (table_name) => {
 	const items = await parallelScan(
@@ -99,6 +102,9 @@ function create_sql_type(field_item) {
 }
 
 const extract_table_structure = async (table_name) => {
+	if (verbose) {
+		console.log(`Extracting table structure "${table_name}"...`);
+	}
 	const mysql_connection = await mysql.createConnection({
 		host: process.env.MYSQL_HOST,
 		user: process.env.MYSQL_USER,
@@ -126,6 +132,12 @@ const extract_table_structure = async (table_name) => {
 	}
 
 	const allItems = await getItems(table_name);
+	if (allItems.length == 0) {
+		if (verbose) {
+			console.log(`Table ${table_name} has no item`);
+		}
+		return false;
+	}
 	let base_col = extract_columns(allItems[0]);
 	let struct_data = [];
 	for (let j = 0; j < base_col.length; j++) {
@@ -141,9 +153,6 @@ const extract_table_structure = async (table_name) => {
 			item.index = true;
 		}
 		struct_data.push(item);
-	}
-	if (struct_data.length == 0) {
-		return false
 	}
 	for (let i = 0; i < allItems.length; i++) {
 		let columns = extract_columns(allItems[i]);
@@ -180,6 +189,9 @@ const extract_table_structure = async (table_name) => {
 		if (struct_data[j].length < 250 && struct_data[j].type == "text") {
 			struct_data[j].type = "varchar";
 		}
+		if (verbose) {
+			console.log(`Column ${struct_data[j].name} has type ${struct_data[j].type} and length ${struct_data[j].length}`);
+		}
 	}
 
 	let mysql_field = [];
@@ -203,7 +215,10 @@ const extract_table_structure = async (table_name) => {
 				sql += ", ";
 			}
 		}
-		sql += ") ENGINE=InnoDB DEFAULT CHARSET=utf8;";
+		sql += `) ENGINE=${mysqlEngine} DEFAULT CHARSET=${mysqlCharset};`;
+		if (verbose) {
+			console.log(`Creating table ${table_name} in MySQL : ${sql}`);
+		}
 		await mysql_connection.query(sql);
 	} else {
 		let sqlDescribe = `SHOW COLUMNS FROM ${table_name}`;
@@ -221,6 +236,9 @@ const extract_table_structure = async (table_name) => {
 		for (let k = struct_data.length - 1; k >= 0; k--) {
 			if (diff.includes(struct_data[k].name)) {
 				let sqlAlter = `ALTER TABLE ${table_name} ADD COLUMN \`${struct_data[k].name}\` ${create_sql_type(struct_data[k])}`;
+				if (verbose) {
+					console.log(`Altering table ${table_name} in MySQL : ${sqlAlter}`);
+				}
 				await mysql_connection.query(sqlAlter);
 			}
 		}
@@ -239,8 +257,14 @@ const copy_data = async (table_name, truncate = false) => {
 		database: process.env.MYSQL_DATABASE,
 	});
 	if (truncate) {
+		if (verbose) {
+			console.log(`Truncating table ${table_name} in MySQL`);
+		}
 		sql = `TRUNCATE TABLE ${table_name};`;
 		await mysql_connection.query(sql);
+	}
+	if (verbose) {
+		console.log(`Copying ${allItems.length} items from DynamoDB to MySQL table ${table_name}`);
 	}
 	for (let i = 0; i < allItems.length; i++) {
 		let columns = extract_columns(allItems[i]);
@@ -258,14 +282,41 @@ const copy_data = async (table_name, truncate = false) => {
 	await mysql_connection.end();
 };
 
+const check_env_variables = () => {
+	if (process.env.MYSQL_HOST == undefined) {
+		console.error("Missing MySQL_HOST environment variable");
+		process.exit(1);
+	}
+	
+	if (process.env.MYSQL_USER == undefined) {
+		console.error("Missing MYSQL_USER environment variable");
+		process.exit(1);
+	}
+	
+	if (process.env.MYSQL_PASSWORD == undefined) {
+		console.error("Missing MYSQL_PASSWORD environment variable");
+		process.exit(1);
+	}
+	
+	if (process.env.MYSQL_DATABASE == undefined) {
+		console.error("Missing MYSQL_DATABASE environment variable");
+		process.exit(1);
+	}
+}
+
 exports.dynamodb2MySQL = async (table_name, truncate = false) => {
+	check_env_variables()
 	await extract_table_structure(table_name);
 	await copy_data(table_name, truncate);
 };
 
 exports.dynamodb2MySQLAllTables = async (truncate = false) => {
+	check_env_variables()
 	const command = new ListTablesCommand({});
 	const response = await ddb_client.send(command);
+	if (verbose && response.TableNames.length == 0) {
+		console.log(`No table found in DynamoDB`);
+	}
 	for (let i = 0; i < response.TableNames.length; i++) {
 		let table_name = response.TableNames[i];
 		await extract_table_structure(table_name);

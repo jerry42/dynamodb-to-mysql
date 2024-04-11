@@ -50,7 +50,12 @@ export MYSQL_PASSWORD=password
 export MYSQL_DATABASE=my_database
 export CONCURRENCY=100
 ```
-
+You have the option to configure environment variables to customize the MySQL engine and charset. Additionally, verbose mode can be enabled to monitor processes (console.log).
+```bash
+export MYSQL_CHARSET=utf8
+export MYSQL_ENGINE=InnoDB
+export VERBOSE=true
+```
 This package uses the following libraries:
  
  - [@shelf/dynamodb-parallel-scan](https://github.com/shelfio/dynamodb-parallel-scan)

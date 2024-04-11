@@ -5,7 +5,10 @@ process.env.MYSQL_HOST = '127.0.0.1'
 process.env.MYSQL_USER = 'root'
 process.env.MYSQL_PASSWORD = 'password'
 process.env.MYSQL_DATABASE = 'my_database'
+process.env.MYSQL_CHARSET = 'utf8'
+process.env.MYSQL_ENGINE = 'InnoDB'
 process.env.CONCURRENCY = 100
+process.env.VERBOSE = false
 
 // You need to be authenticated to AWS CLI
 process.env.AWS_ACCESS_KEY_ID='AKIAIOSFODNN7EXAMPLE'
